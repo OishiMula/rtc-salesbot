@@ -6,5 +6,3 @@ This bot is simliar to another project I made, the [CNFT Sales Twitter Bot](http
 # Requirements
 * A [Twitter developer account](https://developer.twitter.com/) - Will require [Elevated Access](https://developer.twitter.com/en/portal/products/elevated) for full twitter functions.
 * The Policy ID of the CNFT project
-
-# More to come soon
