@@ -88,7 +88,7 @@ def compare_listings(project, file):
                 (current_sales, page_num) = next_page('rtc', page_num)
             time.sleep(1)
 
-        elif num > 0 or num == 19:)
+        elif num > 0 or num == 19:
             if page_num > 1:
                 total_listings = (page_num - 1) * 19 + num
             else:
