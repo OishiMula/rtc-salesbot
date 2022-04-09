@@ -88,8 +88,7 @@ def compare_listings(project, file):
                 (current_sales, page_num) = next_page('rtc', page_num)
             time.sleep(1)
 
-        elif num > 0 or num == 19:
-            print(page_num)
+        elif num > 0 or num == 19:)
             if page_num > 1:
                 total_listings = (page_num - 1) * 19 + num
             else:
@@ -140,10 +139,10 @@ def main():
         first_run = False
         if last_sold_file.is_file() == False:
             current_sales_rtc = retrieve_sales('rtc', 1)
-            pickle.dump(current_sales_rtc['items'][2], open(last_sold_file, 'wb'))
+            pickle.dump(current_sales_rtc['items'][0], open(last_sold_file, 'wb'))
         if last_sold_furin_file.is_file() == False:
             current_sales_furin = retrieve_sales('furin', 1)
-            pickle.dump(current_sales_furin['items'][3], open(last_sold_furin_file, 'wb'))
+            pickle.dump(current_sales_furin['items'][0], open(last_sold_furin_file, 'wb'))
 
     while running == True:
         raging_teens = 'rtc'
