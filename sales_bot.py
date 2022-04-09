@@ -81,7 +81,6 @@ def retrieve_media_id(img_raw):
 
 def compare_listings(current_listing, saved_listing):
     last_sold_saved = pickle.load(open(saved_listing, 'rb'))
-    
     # This is a catch-up function, in case OpenCNFT is down and there were listings not posted
     print(f"Comparing saved to recent: {current_listing['items'][0]['unit_name']} --- {last_sold_saved['unit_name']}")
     check_flag = True
@@ -89,7 +88,6 @@ def compare_listings(current_listing, saved_listing):
     while check_flag == True:
         if int(last_sold_saved['sold_at']) < current_listing['items'][x]['sold_at']:
             x += 1
-            new_current = current_listing['items'][x]
             print(f"Current: {current_listing['items'][x]['unit_name']}")
             print("Older listing is more recent, adding.")
             time.sleep(3)
@@ -102,11 +100,6 @@ def compare_listings(current_listing, saved_listing):
                 x -= 1 
                 time.sleep(3)
             check_flag = False
-
-    if int(current_listing['items'][0]['sold_at']) > int(last_sold_saved['sold_at']):
-        pickle.dump(current_listing['items'][0], open(saved_listing, 'wb'))
-        print("Ding - New sale. Tweeting now.")
-        tweet_sale(current_listing['items'][0])
 
 @limits(calls=30, period=MINUTE)
 def main():
