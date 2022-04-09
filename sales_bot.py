@@ -26,10 +26,6 @@ twitter_v1_1_auth = tweepy.OAuth1UserHandler(
 
 twitter = tweepy.API(twitter_v1_1_auth)
 
-# OpenCNFT endpoint for sales on selected Policy ID
-rtc_sales_endpoint = f"https://api.opencnft.io/1/policy/{os.getenv('rtc_policyid')}/transactions?order=date"
-furin_sales_endpoint = f"https://api.opencnft.io/1/policy/{os.getenv('furin_policyid')}/transactions?order=date"
-
 # Creating a first run to see if the file to store last transaciton is made
 first_run = True
 last_sold_file = Path('last_sold.dat')
@@ -48,18 +44,73 @@ def millify(n):
     return '{:.0f}{}'.format(n / 10**(3 * millidx), millnames[millidx])
 
 # The function to retrieve the JSON listings
-def retrieve_sales(p):
+def retrieve_sales(p, page_num):
+    # These endpoints can be changed, either with a .env or hard-code a URL.
+    r_endpoint = f"https://api.opencnft.io/1/policy/{os.getenv('rtc_policyid')}/transactions?page={page_num}&order=date"
+    f_endpoint = f"https://api.opencnft.io/1/policy/{os.getenv('furin_policyid')}/transactions?page={page_num}&order=date"
     match p:
         case 'rtc':
-            response_API = requests.get(f'{rtc_sales_endpoint}')
+            response_API = requests.get(f'{r_endpoint}')
         case 'furin':
-            response_API = requests.get(f'{furin_sales_endpoint}')
+            response_API = requests.get(f'{f_endpoint}')
 
     if response_API.status_code == 200: return response_API.json()
     else: return None
 
+# Cycle through the pages on OpenCNFT
+def next_page(p, page_num):
+    page_num += 1
+    return retrieve_sales(p, page_num), page_num
+
+def prev_page(p, page_num):
+    page_num -= 1
+    num = 19
+    return retrieve_sales(p, page_num), page_num, num
+
+def compare_listings(project, file):
+    # setting enviroment up
+    check_flag = True
+    num = 0
+    page_num = 1
+    last_tweeted = pickle.load(open(file, 'rb'))
+    current_sales = retrieve_sales(project, page_num)
+            
+    while check_flag == True:
+        print(f"last tweet: {last_tweeted['unit_name']} --- current downloaded: {current_sales['items'][num]['unit_name']}")
+        time.sleep(1)
+        if int(current_sales['items'][num]['sold_at']) > int(last_tweeted['sold_at']):
+            print(f"Listing #{num} - {current_sales['items'][num]['unit_name']} is newer then {last_tweeted['unit_name']}. Checking next listing ")
+            num += 1
+            print(f"Checking listing #{num}")
+            if num == 20:
+                print("Retrieving more listings.")
+                num = 0
+                (current_sales, page_num) = next_page('rtc', page_num)
+            time.sleep(1)
+
+        elif num > 0 or num == 19:
+            print(page_num)
+            if page_num > 1:
+                total_listings = (page_num - 1) * 19 + num
+            else:
+                total_listings = num
+            print(f"Found: {total_listings} listings. Beginning to tweet.")
+            while num > 0 or page_num > 1:
+                num -= 1
+                print(f"Tweeting: {current_sales['items'][num]['unit_name']}")
+                tweet_sale(current_sales['items'][num])
+                if num == 0 and page_num > 1:
+                    (current_sales, page_num, num) = prev_page('rtc', page_num)
+                time.sleep(3)
+            pickle.dump(current_sales['items'][num], open(file, 'wb'))
+            check_flag = False
+
+        else:
+            check_flag = False
+            print("Passing")  
+
+# Functions to make media uploads and tweets.
 def tweet_sale(listing):
-    # strings for easy tweeting
     asset = listing['unit_name']
     sold_price = int(float(listing['price']) / 1000000)
     asset_mp = listing['marketplace']
@@ -79,39 +130,6 @@ def retrieve_media_id(img_raw):
     else:
         return twitter.media_upload("404.jpg")
 
-def compare_listings(current_listing, saved_listing):
-    last_sold_saved = pickle.load(open(saved_listing, 'rb'))
-    
-    # This is a catch-up function, in case OpenCNFT is down and there were listings not posted
-    print(f"Comparing saved to recent: {current_listing['items'][0]['unit_name']} --- {last_sold_saved['unit_name']}")
-    check_flag = True
-    x = 0
-    while check_flag == True:
-        if int(last_sold_saved['sold_at']) < current_listing['items'][x]['sold_at']:
-            x += 1
-            print(f"Current: {current_listing['items'][x]['unit_name']}")
-            print("Older listing is more recent, adding.")
-            time.sleep(3)
-        else:
-            if x == 0:
-                print(f"Current: {current_listing['items'][0]['unit_name']} - pass")
-            while x > 0:
-                print(f"you have {x} listings. - tweeting now")
-                last_sold_saved = pickle.load(open(last_sold_file, 'rb'))
-                if int(current_listing['items'][0]['sold_at']) > int(last_sold_saved['sold_at']):
-                    print(f"Ding! Tweeting: {current_listing['items'][x]['unit_name']}")
-                    pickle.dump(current_listing['items'][x], open(last_sold_file, 'wb'))
-                    tweet_sale(current_listing['items'][x])
-                    x -= 1 
-                time.sleep(3)
-            check_flag = False
-
-    # If there is a new sale, it will post a tweet
-    if int(current_listing['items'][0]['sold_at']) > int(last_sold_saved['sold_at']):
-        pickle.dump(current_listing['items'][0], open(saved_listing, 'wb'))
-        print(f"Ding - New sale. Tweeting now.  {current_listing['items'][0]['unit_name']}")
-        tweet_sale(current_listing['items'][0])
-
 @limits(calls=30, period=MINUTE)
 def main():
     global first_run
@@ -121,23 +139,21 @@ def main():
     if first_run == True:
         first_run = False
         if last_sold_file.is_file() == False:
-            current_sales_rtc = retrieve_sales('rtc')
-            pickle.dump(current_sales_rtc['items'][0], open(last_sold_file, 'wb'))
+            current_sales_rtc = retrieve_sales('rtc', 1)
+            pickle.dump(current_sales_rtc['items'][2], open(last_sold_file, 'wb'))
         if last_sold_furin_file.is_file() == False:
-            current_sales_furin = retrieve_sales('furin')
-            pickle.dump(current_sales_furin['items'][0], open(last_sold_furin_file, 'wb'))
+            current_sales_furin = retrieve_sales('furin', 1)
+            pickle.dump(current_sales_furin['items'][3], open(last_sold_furin_file, 'wb'))
 
     while running == True:
-        # Check if listings were retrieved, if not, timeout in case OpenCNFT is down
-        current_sales_rtc = retrieve_sales('rtc')
-        current_sales_furin =retrieve_sales('furin')
-        if current_sales_rtc == None or current_sales_furin == None:
-            time.sleep(120)
-            continue
+        raging_teens = 'rtc'
+        furins = 'furin'
 
-        compare_listings(current_sales_rtc, last_sold_file)
-        compare_listings(current_sales_furin, last_sold_furin_file)
+        # The main function to post on twitter if changes are detected
+        compare_listings(raging_teens, last_sold_file)
+        compare_listings(furins, last_sold_furin_file)
+
         time.sleep(30)
-        
+
 if __name__ == "__main__":
     main()
