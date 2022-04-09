@@ -104,7 +104,7 @@ def compare_listings(current_listing, saved_listing):
             check_flag = False
 
     if int(current_listing['items'][0]['sold_at']) > int(last_sold_saved['sold_at']):
-        pickle.dump(current_listing[0], open(saved_listing, 'wb'))
+        pickle.dump(current_listing['items'][0], open(saved_listing, 'wb'))
         print("Ding - New sale. Tweeting now.")
         tweet_sale(current_listing['items'][0])
 
@@ -113,7 +113,7 @@ def main():
     global first_run
     global running
 
-    # Upon starting, it will check for a last_sold csve. If none exist, it will enter the most recent sale to begin the monitor.
+    # Upon starting, it will check for a last_sold file. If none exist, it will enter the most recent sale to begin the monitor.
     if first_run == True:
         first_run = False
         if last_sold_file.is_file() == False:
