@@ -32,7 +32,6 @@ last_sold_file = Path('last_sold.dat')
 last_sold_furin_file = Path('last_furin_sold.dat')
 
 cg = CoinGeckoAPI()
-running = True
 MINUTE = 60
 ada = '₳'
 
@@ -94,7 +93,7 @@ def compare_listings(project, file):
                 total_listings = (page_num - 1) * 19 + num
             else:
                 total_listings = num
-            print(f"Found: {total_listings} listings. Beginning to tweet.")
+            print(f"Found: {total_listings} listing{'' if total_listings == 1 else 's'}. Beginning to tweet.")
             while num > 0 or page_num > 1:
                 num -= 1
                 print(f"Tweeting: {current_sales['items'][num]['unit_name']}")
@@ -107,8 +106,7 @@ def compare_listings(project, file):
             
         # If there was nothing new - skip to end.
         else:
-            check_flag = False
-            print("Passing")  
+            check_flag = False 
 
 # Creating a payload message to tweet
 def tweet_sale(listing):
@@ -117,7 +115,14 @@ def tweet_sale(listing):
     asset_mp = listing['marketplace']
     asset_img_raw = listing['thumbnail']['thumbnail'][7:]
     asset_media_id = retrieve_media_id(asset_img_raw)
-    usd = cg.get_price(ids='cardano', vs_currencies='usd')
+    # Making exception incase CoinGecko is having issues
+    while True:
+        try:
+            usd = cg.get_price(ids='cardano', vs_currencies='usd')
+            break
+        except requests.exceptions.RequestException:
+            time.sleep(15)
+            pass
 
     twitter.update_status(status=f"{asset} was purchased from {asset_mp} for the price of {ada}{sold_price:,} (${(usd['cardano']['usd'] * sold_price):,.2f}).", media_ids=[asset_media_id.media_id])
     os.remove('image.png')
@@ -135,8 +140,6 @@ def retrieve_media_id(img_raw):
 @limits(calls=30, period=MINUTE)
 def main():
     global first_run
-    global running
-
     # Upon starting, it will check for a last_sold file. If none exist, it will enter the most recent sale to begin the monitor.
     if first_run == True:
         first_run = False
@@ -147,7 +150,7 @@ def main():
             current_sales_furin = retrieve_sales('furin', 1)
             pickle.dump(current_sales_furin['items'][0], open(last_sold_furin_file, 'wb'))
 
-    while running == True:
+    while True:
         raging_teens = 'rtc'
         furins = 'furin'
 
