@@ -69,8 +69,15 @@ def compare_listings(project, file):
     current_sales = retrieve_sales(project, page_num)
             
     while check_flag == True:
-        print(f"last tweet: {last_tweeted['unit_name']} --- current downloaded: {current_sales['items'][num]['unit_name']}")
-        time.sleep(1)
+        # Check in case OpenCNFT is down
+        try:
+            print(f"last tweet: {last_tweeted['unit_name']} --- current downloaded: {current_sales['items'][num]['unit_name']}")
+        except TypeError:
+            time.sleep(120)
+            break
+
+        # Check the listing downloaded and compare to what was last tweeted
+        # If downloaded listing is newer, check the next listing / page
         if int(current_sales['items'][num]['sold_at']) > int(last_tweeted['sold_at']):
             print(f"Listing #{num} - {current_sales['items'][num]['unit_name']} is newer then {last_tweeted['unit_name']}. Checking next listing ")
             num += 1
@@ -81,6 +88,7 @@ def compare_listings(project, file):
                 (current_sales, page_num) = next_page('rtc', page_num)
             time.sleep(1)
 
+        # If there were new listings, begin to tweet them from oldest to newest.
         elif num > 0 or num == 19:
             if page_num > 1:
                 total_listings = (page_num - 1) * 19 + num
@@ -96,12 +104,13 @@ def compare_listings(project, file):
                 time.sleep(3)
             pickle.dump(current_sales['items'][num], open(file, 'wb'))
             check_flag = False
-
+            
+        # If there was nothing new - skip to end.
         else:
             check_flag = False
             print("Passing")  
 
-# Functions to make media uploads and tweets.
+# Creating a payload message to tweet
 def tweet_sale(listing):
     asset = listing['unit_name']
     sold_price = int(float(listing['price']) / 1000000)
