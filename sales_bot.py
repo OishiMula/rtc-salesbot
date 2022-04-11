@@ -23,14 +23,19 @@ logging.basicConfig(
 )
 
 # Creating the Twitter tweepy connection for V1.1 (media_upload)
-twitter_v1_1_auth = tweepy.OAuth1UserHandler(
+twitter_auth = tweepy.OAuth1UserHandler(
     consumer_key=os.getenv('consumer_key'),
     consumer_secret=os.getenv('consumer_secret'),
     access_token=os.getenv('access_token'),
     access_token_secret=os.getenv('access_token_secret')
 )
 
-twitter = tweepy.API(twitter_v1_1_auth)
+twitter = tweepy.API(
+    twitter_auth,
+    retry_count = 5,
+    retry_delay = 10,
+    wait_on_rate_limit=True
+)
 
 # Project name and file to store last tweeted information
 project = "Raging Teens Clan"
@@ -44,17 +49,17 @@ ada = '₳'
 # The function to retrieve the JSON listings
 def retrieve_sales(p, page_num):
     # These endpoints can be changed, either with a .env or hard-code a URL.
-    r_endpoint = f"https://api.opencnft.io/1/policy/{os.getenv('rtc_policyid')}/transactions?page={page_num}&order=date"
-    f_endpoint = f"https://api.opencnft.io/1/policy/{os.getenv('furin_policyid')}/transactions?page={page_num}&order=date"
+    project1_api = f"https://api.opencnft.io/1/policy/{os.getenv('project1')}/transactions?page={page_num}&order=date"
+    project2_api = f"https://api.opencnft.io/1/policy/{os.getenv('project2')}/transactions?page={page_num}&order=date"
     try:
         match p:
             case 'rtc':
-                opencnft_response = requests.get(f'{r_endpoint}')
+                opencnft_response = requests.get(f'{project1_api}')
             case 'furin':
-                opencnft_response = requests.get(f'{f_endpoint}')
+                opencnft_response = requests.get(f'{project2_api}')
         return opencnft_response.json()
     except requests.exceptions.RequestException as e:
-        logging.error(e)
+        logging.error("Endpoint failure - going to sleep.")
         time.sleep(300)
         return None
 
@@ -85,9 +90,9 @@ def compare_listing(project, file):
         # Check the listing downloaded and compare to what was last tweeted
         # If downloaded listing is newer, check the next listing / page
         if int(cnft_listing['items'][num]['sold_at']) > int(last_tweeted['sold_at']):
+            logging.info(f"Listing #{total_listings} - {cnft_listing['items'][num]['unit_name']} is a new sale. Checking next listing.")
             total_listings += 1
             num += 1
-            logging.info(f"Listing #{total_listings} - {cnft_listing['items'][num]['unit_name']} is a new sale. Checking next listing.")
             if num == 20:
                 logging.info("Retrieving next page listings.")
                 num = 0
@@ -127,7 +132,7 @@ def tweet_sale(listing):
             break
         except (requests.exceptions.RequestException, tweepy.TweepyException) as e:
             logging.error(e)
-            time.sleep(15)
+            time.sleep(120)
             continue        
 
 def retrieve_media_id(img_raw):
